@@ -16,6 +16,8 @@ import mlflow
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import tempfile
+import shutil
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
@@ -289,6 +291,22 @@ def tune_and_log(X: pd.DataFrame, y: pd.Series) -> None:
 
         # Log the trained pipeline as an MLflow model (creates MLmodel, model.pkl, env spec)
         mlflow.sklearn.log_model(best_model, artifact_path="model")
+
+        # Save to a temporary directory to avoid collisions across runs, then upload folder
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_model_dir = os.path.join(tmpdir, "model")
+            mlflow.sklearn.save_model(best_model, path=local_model_dir)
+            mlflow.log_artifacts(local_model_dir, artifact_path="model")
+
+        # Save a stable local copy for inference service
+        stable_model_dir = os.path.join(os.path.dirname(__file__), "model")
+        try:
+            if os.path.exists(stable_model_dir):
+                shutil.rmtree(stable_model_dir)
+            mlflow.sklearn.save_model(best_model, path=stable_model_dir)
+            print(f"Saved local model copy for inference at: {stable_model_dir}")
+        except Exception as _e:
+            print(f"Warning: could not save stable local model copy: {_e}")
 
         print("Best Params:", grid.best_params_)
         print(

@@ -12,6 +12,8 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import tempfile
+import shutil
 
 import dagshub
 import mlflow
@@ -118,6 +120,25 @@ def train_baseline(X: pd.DataFrame, y: pd.Series) -> None:
 
         mlflow.log_artifact(cm_path)
         mlflow.log_artifact(pr_path)
+
+        # Log the trained pipeline as an MLflow model (ensures MLmodel + model.pkl saved)
+        mlflow.sklearn.log_model(pipeline, artifact_path="model")
+
+        # Save to a temporary directory to avoid collisions across runs, then upload folder
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_model_dir = os.path.join(tmpdir, "model")
+            mlflow.sklearn.save_model(pipeline, path=local_model_dir)
+            mlflow.log_artifacts(local_model_dir, artifact_path="model")
+
+        # Save a stable local copy for inference service
+        stable_model_dir = os.path.join(os.path.dirname(__file__), "model")
+        try:
+            if os.path.exists(stable_model_dir):
+                shutil.rmtree(stable_model_dir)
+            mlflow.sklearn.save_model(pipeline, path=stable_model_dir)
+            print(f"Saved local model copy for inference at: {stable_model_dir}")
+        except Exception as _e:
+            print(f"Warning: could not save stable local model copy: {_e}")
 
         print(
             f"Baseline metrics — F1: {f1:.4f}, Precision: {precision:.4f}, "

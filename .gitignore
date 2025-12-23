@@ -9,6 +9,9 @@ artifacts/
 mlruns/
 *.db
 
+# model
+model/
+
 # Python
 __pycache__/
 *.py[cod]
